@@ -140,7 +140,7 @@ function processImage(centerOffset, doItForRealz) {
 				curValue = 0;
 			}
 		}
-		palettes = palettes.concat(curLineLeftPalette).concat(curLineRightPalette);
+		palettes = palettes.concat(curLineRightPalette.reverse()).concat(curLineLeftPalette.reverse());
 	}
 	//if (lastValue != -1) {
 		//outData.push(lastLength);
