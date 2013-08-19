@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script src="colorz.js"></script>
+<script>
+"use strict";
+var img;
+var newColorMap = {};
+
+function getClosestMatch(color) {
+	var retval = allColorMap[color];
+	if (typeof(retval) == "undefined") {
+		retval = newColorMap[color];
+		if (typeof(retval) == "undefined") {
+			retval = addColorMap(color);
+		}
+	}
+	//console.log(color.toString(16) + ":" + retval);
+	return retval;
+}
+
+function addColorMap(color) {
+	var bestFit = 0;
+	var bestCode = 0;
+	var bestError = 0xffffff;
+	for (var i = 0; i < allColorArr.length; i++) {
+		var rgb = allColorArr[i]["c"];
+		var error = Math.abs((rgb & 0xff) - (color & 0xff)) + Math.abs(((rgb >> 8) & 0xff) - ((color >> 8) & 0xff)) + Math.abs(((rgb >> 16) & 0xff) - ((color >> 16) & 0xff)); //TODO fix
+		if (error < bestError) {
+			bestFit = rgb;
+			bestCode = allColorArr[i]["p"];
+			bestError = error;
+		}
+	}
+	newColorMap[color] = bestCode;
+	return bestCode;
+}
+
+function evacuateTheDanceFloor() {
+	img = new Image();
+	img.onload = imageLoaded;
+	img.src = "test-0.png";
+}
+function imageLoaded() {
+	var canvas = document.getElementById("canvas");
+	canvas.width = 160;
+	canvas.height = 80;
+	var ctx = canvas.getContext("2d");
+	ctx.fillStyle = "#003366";
+	ctx.fillRect(0, 0, canvas.width, canvas.height);
+	ctx.drawImage(img, 0, 0, img.width / 5, img.height / 5);
+	var imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+	console.log(imgData);
+	var outData = [];
+	//run length encoding: when we see new color, write old sequence if there is one, start new sequence
+	//at end write final sequence
+	var lastValue = -1;
+	var lastLength = -1;
+	var curLinePalette = [0, 0, 0, 0];
+	var bitCount = 6;
+	var curValue = 0;
+	var curLineColors;
+	var palettes = [];
+	var derpData = [];
+	for (var y = 0; y < canvas.height; y++) {
+		curLinePalette = [0, 0, 0, 0];
+		var freeColor = 0;
+		curLineColors = {};
+		for (var x = 0; x < canvas.width; x++) {
+			var offsetCanvas = ((y * canvas.width) + x) * 4;
+			var color = imgData.data[offsetCanvas++] << 16 | imgData.data[offsetCanvas++] << 8 | imgData.data[offsetCanvas++];
+			var colorMap = curLineColors[color];
+			if (typeof(colorMap) == "undefined") {
+				var colorVal = getClosestMatch(color);
+				colorMap = curLinePalette.indexOf(colorVal);
+				if (colorMap < 0) {
+					if (freeColor < 4) {
+						colorMap = freeColor;
+						curLinePalette[freeColor] = getClosestMatch(color);
+						freeColor++;
+					} else {
+						console.log("No more colors.");
+						colorMap = 0;
+					}
+				}
+				curLineColors[color] = colorMap;
+			}
+			curValue |= colorMap << bitCount;
+			bitCount -= 2;
+			if (bitCount < 0) {
+				bitCount = 6;
+				if (curValue == lastValue) {
+					lastLength++;
+				} else {
+					if (lastValue != -1) {
+						outData.push(lastLength);
+						outData.push(lastValue);
+					}
+					lastValue = curValue;
+					lastLength = 1;
+				}
+				derpData.push(curValue);
+				curValue = 0;
+			}
+		}
+		palettes = palettes.concat(curLinePalette);
+	}
+	if (lastValue != -1) {
+		outData.push(lastLength);
+		outData.push(lastValue);
+	}
+	//console.log(outData);
+	//console.log(palettes);
+	var outDataStr = printOutData(derpData);
+	var outPaletteStr = printOutData(palettes);
+	document.getElementById("output").value = "IMAGEFRAME0:\n" + outDataStr + "\nPALETTEFRAME0:\n" + outPaletteStr;
+}
+
+function printOutData(outData) {
+	var outArr = new Array(outData.length);
+	for (var i = 0; i < outData.length; i++) {
+		outArr[i] = "\tDB $" + outData[i].toString(16);
+	}
+	return outArr.join("\n");
+}
+		
+</script>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<textarea id="output">
+</textarea>
+<button onclick="evacuateTheDanceFloor()">Evacuate the dance floor</button>
+</body>
+</html>
