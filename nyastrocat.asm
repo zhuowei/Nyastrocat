@@ -2,6 +2,8 @@
 DSPLY	equ	$ff		;Bally Check debug port
 PALETTEPOINTER	equ	$4f00	; stores current palette pointer
 LINEINTNUM 	equ 	$4f02	; scanline to trigger interrupt
+RLESCRATCH1	equ	$4ee0
+RLESCRATCH2	equ	$4ee2
 
 	org FIRSTC		;this is a cart
 BOOTCA:
@@ -46,8 +48,8 @@ START:
 	LD      A,LFRVEC AND 0FFH ;bottom byte of the interrupt
 	OUT     (INFBK),A	; set the interrupt bottom byte
 
-	ld a, $d8
-	out (COL0L), a
+	ld a, 133
+	out (HORCB), a
 
 	ld a, 0
 	out (INLIN), a
@@ -67,6 +69,14 @@ LINEHANDLER:
 	PUSH    IX
 	; get the current line
 	ld a, (LINEINTNUM)
+	ld c, a
+	ld b, 0
+	ld HL, PALETTEFRAME0
+	add HL, BC
+	;add HL, BC
+	LD C, COLBX
+	LD B, 8
+	OTIR
 	;ld a, 0
 	;ld b, a
 	;ld de, PALETTEFRAME0
@@ -75,7 +85,7 @@ LINEHANDLER:
 	;add hl, bc
 	;add hl, bc
 	;ld a, (hl)
-	out (COL0L), a
+	;out (COL0L), a
 	;inc hl
 	;ld a, (hl)
 	;out (COL1R), a
@@ -88,7 +98,7 @@ LINEHANDLER:
 	ld a, (LINEINTNUM)
 	; put it to next line
 	add a, 4
-	cp $d0		;bottom of screen?
+	cp 80		;bottom of screen?
 	jr z, RESETSCR
 LINEHANDLERNEXTLINE:
 	out (INLIN), a

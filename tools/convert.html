@@ -52,7 +52,7 @@ function imageLoaded() {
 			leastExhaustLoc = i;
 		}
 	}*/
-	leastExhaustLoc = 29; //It's been scientifically proven, fool! (using commented out for loop)
+	leastExhaustLoc = 27; //It's been scientifically proven, fool! (using commented out for loop)
 	console.log(leastExhaustCount + ":" + leastExhaustLoc);
 	processImage(leastExhaustLoc, true);
 }
@@ -63,7 +63,7 @@ function processImage(centerOffset, doItForRealz) {
 	var ctx = canvas.getContext("2d");
 	ctx.fillStyle = "#003366";
 	ctx.fillRect(0, 0, canvas.width, canvas.height);
-	ctx.drawImage(img, 0, 0, img.width / 5, img.height / 5);
+	ctx.drawImage(img, -2, 0, img.width / 5, img.height / 5);
 	var imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 	console.log(imgData);
 	var outData = [];
@@ -140,7 +140,10 @@ function processImage(centerOffset, doItForRealz) {
 				curValue = 0;
 			}
 		}
-		palettes = palettes.concat(curLineRightPalette.reverse()).concat(curLineLeftPalette.reverse());
+		if (y % 4 == 3) {
+			palettes = palettes.concat(curLineLeftPalette.reverse()).concat(curLineRightPalette.reverse());
+			console.log("Y = " + y + ":" + palettes.length);
+		}
 	}
 	//if (lastValue != -1) {
 		//outData.push(lastLength);
@@ -157,6 +160,7 @@ function processImage(centerOffset, doItForRealz) {
 	document.getElementById("output").value = "IMAGEFRAME0:\n" + outDataStr + "\nPALETTEFRAME0:\n" + outPaletteStr;
 	theRleData = rleData;
 	theDerpData = derpData;
+	console.log(palettes.length);
 	return colorExhaustedCount;
 }
 
