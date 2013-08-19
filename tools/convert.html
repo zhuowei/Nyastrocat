@@ -6,6 +6,7 @@
 "use strict";
 var img;
 var newColorMap = {};
+var theRleData, theDerpData;
 
 function getClosestMatch(color) {
 	var retval = allColorMap[color];
@@ -42,6 +43,20 @@ function evacuateTheDanceFloor() {
 	img.src = "test-0.png";
 }
 function imageLoaded() {
+	var leastExhaustCount = 0xffff;
+	var leastExhaustLoc = -1;
+	/*for (var i = 0; i < 160; i++) {
+		var exhaustCount = processImage(i, false);
+		if (exhaustCount < leastExhaustCount) {
+			leastExhaustCount = exhaustCount;
+			leastExhaustLoc = i;
+		}
+	}*/
+	leastExhaustLoc = 29; //It's been scientifically proven, fool! (using commented out for loop)
+	console.log(leastExhaustCount + ":" + leastExhaustLoc);
+	processImage(leastExhaustLoc, true);
+}
+function processImage(centerOffset, doItForRealz) {
 	var canvas = document.getElementById("canvas");
 	canvas.width = 160;
 	canvas.height = 80;
@@ -56,64 +71,93 @@ function imageLoaded() {
 	//at end write final sequence
 	var lastValue = -1;
 	var lastLength = -1;
-	var curLinePalette = [0, 0, 0, 0];
+	var curLineLeftPalette = [0, 0, 0, 0];
+	var curLineRightPalette = [0, 0, 0, 0];
+	var curLinePalette = curLineLeftPalette;
 	var bitCount = 6;
 	var curValue = 0;
+	var curLineColorsLeft;
+	var curLineColorsRight;
 	var curLineColors;
 	var palettes = [];
 	var derpData = [];
+	var freeLeftColor = 0;
+	var freeRightColor = 0;
+	var colorExhaustedCount = 0;
 	for (var y = 0; y < canvas.height; y++) {
-		curLinePalette = [0, 0, 0, 0];
-		var freeColor = 0;
-		curLineColors = {};
+		if (y % 4 == 0) {
+			curLineLeftPalette = [0, 0, 0, 0];
+			curLineRightPalette = [0, 0, 0, 0];
+			freeLeftColor = 0;
+			freeRightColor = 0;
+			curLineColorsLeft = {};
+			curLineColorsRight = {};
+		}
+		var lastColorMap = 0;
 		for (var x = 0; x < canvas.width; x++) {
+			curLineColors = x >= centerOffset? curLineColorsRight : curLineColorsLeft;
+			curLinePalette = x >= centerOffset? curLineRightPalette : curLineLeftPalette;
 			var offsetCanvas = ((y * canvas.width) + x) * 4;
 			var color = imgData.data[offsetCanvas++] << 16 | imgData.data[offsetCanvas++] << 8 | imgData.data[offsetCanvas++];
 			var colorMap = curLineColors[color];
 			if (typeof(colorMap) == "undefined") {
 				var colorVal = getClosestMatch(color);
 				colorMap = curLinePalette.indexOf(colorVal);
+				var freeColor = x >= centerOffset? freeRightColor: freeLeftColor;
 				if (colorMap < 0) {
 					if (freeColor < 4) {
 						colorMap = freeColor;
 						curLinePalette[freeColor] = getClosestMatch(color);
-						freeColor++;
+						if (x >= centerOffset) {
+							freeRightColor++;
+						} else {
+							freeLeftColor++;
+						}
 					} else {
-						console.log("No more colors.");
-						colorMap = 0;
+						//console.log("No more colors." + x + ":" + y + "color map: " + JSON.stringify(curLineColors) + ":" + freeLeftColor + ":" + freeRightColor);
+						colorMap = lastColorMap;
+						colorExhaustedCount++;
 					}
 				}
 				curLineColors[color] = colorMap;
 			}
+			lastColorMap = colorMap;
 			curValue |= colorMap << bitCount;
 			bitCount -= 2;
 			if (bitCount < 0) {
 				bitCount = 6;
-				if (curValue == lastValue) {
-					lastLength++;
-				} else {
-					if (lastValue != -1) {
-						outData.push(lastLength);
-						outData.push(lastValue);
-					}
+				//if (curValue == lastValue) {
+				//	lastLength++;
+				//} else {
+					//if (lastValue != -1) {
+					//	outData.push(lastLength);
+					//	outData.push(lastValue);
+					//}
 					lastValue = curValue;
 					lastLength = 1;
-				}
+				//}
 				derpData.push(curValue);
 				curValue = 0;
 			}
 		}
-		palettes = palettes.concat(curLinePalette);
+		palettes = palettes.concat(curLineLeftPalette).concat(curLineRightPalette);
 	}
-	if (lastValue != -1) {
-		outData.push(lastLength);
-		outData.push(lastValue);
-	}
+	//if (lastValue != -1) {
+		//outData.push(lastLength);
+		//outData.push(lastValue);
+	//}
 	//console.log(outData);
 	//console.log(palettes);
-	var outDataStr = printOutData(derpData);
+	if (!doItForRealz) return colorExhaustedCount;
+	console.log(derpData);
+	var rleData = doTheFancyRLEShirt(derpData);
+	console.log(rleData);
+	var outDataStr = printOutData(rleData);
 	var outPaletteStr = printOutData(palettes);
 	document.getElementById("output").value = "IMAGEFRAME0:\n" + outDataStr + "\nPALETTEFRAME0:\n" + outPaletteStr;
+	theRleData = rleData;
+	theDerpData = derpData;
+	return colorExhaustedCount;
 }
 
 function printOutData(outData) {
@@ -123,7 +167,73 @@ function printOutData(outData) {
 	}
 	return outArr.join("\n");
 }
-		
+
+function doTheFancyRLEShirt(derpData) {
+	/*
+	Read in data. if the byte is different than previous one, write previous count and previous value to the output stream.
+	otherwise increment the count by one.
+	at end write out the remaining value and count.
+	This should produce something like this:
+	11 11 11 11 11 11 11 11 22 22 22 33 44 55
+	->
+	08 11 03 22 01 33 01 44 01 55
+	look at dat compression.
+	*/
+	var outputData = new Array();
+	var lastValue = -1;
+	var lastLength = 0;
+	for (var i = 0; i < derpData.length; i++) {
+		var curValue = derpData[i];
+		if (curValue != lastValue || lastLength >= 0xff) {
+			if (lastValue >= 0) {
+				if (lastLength > 0xff) {
+					console.log("Peach! too long");
+				}
+				outputData.push(lastLength);
+				outputData.push(lastValue);
+			}
+			lastValue = curValue;
+			lastLength = 1;
+		} else {
+			lastLength++;
+		}
+	}
+	if (lastLength > 0xff) {
+		console.log("Peach! too long");
+	} //TODO handle this edge case
+	outputData.push(lastLength);
+	outputData.push(lastValue);
+	return outputData;
+}
+
+function testRle() {
+	/*var testData = [11, 11, 11, 11, 11, 11, 11, 11, 22, 22, 22, 33, 44, 55];
+	var output = doTheFancyRLEShirt(testData);
+	console.log(output.join(" "));*/
+	var derpOutput = unRle(theRleData);
+	for (var i = 0; i < derpOutput.length; i++) {
+		if (derpOutput[i] != theDerpData[i]) {
+			console.log("FAIL at " + i);
+			break;
+		}
+	}
+}
+
+function unRle(data) {
+	var outArray = new Array(40 * 80);
+	var outArrayPointer = 0;
+	for (var i = 0; outArrayPointer < outArray.length; ) {
+		var rlength = data[i];
+		i++;
+		var rvalue = data[i];
+		i++;
+		for (var a = 0; a < rlength; a++) {
+			outArray[outArrayPointer] = rvalue;
+			outArrayPointer++;
+		}
+	}
+	return outArray;
+}
 </script>
 </head>
 <body>
