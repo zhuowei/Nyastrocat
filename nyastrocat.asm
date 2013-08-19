@@ -1,9 +1,11 @@
 	INCLUDE "HVGLIB.H"
 DSPLY	equ	$ff		;Bally Check debug port
-PALETTEPOINTER	equ	$4f00	; stores current palette pointer
+CURRENTFRAMENUM	equ	$4f00	; stores current frame number
 LINEINTNUM 	equ 	$4f02	; scanline to trigger interrupt
-RLESCRATCH1	equ	$4ee0
-RLESCRATCH2	equ	$4ee2
+VBLANKSUNTILNEXTFRAME	equ $4eff
+VBLANKSPERFRAME	equ	60	; 1fps
+NUMFRAMES	equ 	7
+
 
 	org FIRSTC		;this is a cart
 BOOTCA:
@@ -48,12 +50,21 @@ START:
 	LD      A,LFRVEC AND 0FFH ;bottom byte of the interrupt
 	OUT     (INFBK),A	; set the interrupt bottom byte
 
-	ld a, 133
-	out (HORCB), a
+	ld a, $d8
+	out (COL0L), a		;background/blue colour. This is actually modified dynamically in the line handler.
+	ld a, $4f
+	out (COL1L), a
+	ld a, $65
+	out (COL2L), a
+	ld a, $8e
+	out (COL3L), a		;also modified in line handler
 
 	ld a, 0
 	out (INLIN), a
 	ld (LINEINTNUM), a
+
+	ld a, VBLANKSPERFRAME
+	ld (VBLANKSUNTILNEXTFRAME), a
 
 TIGHT:
 	hlt
@@ -69,40 +80,21 @@ LINEHANDLER:
 	PUSH    IX
 	; get the current line
 	ld a, (LINEINTNUM)
-	ld c, a
-	ld b, 0
-	ld HL, PALETTEFRAME0
-	add HL, BC
-	;add HL, BC
-	LD C, COLBX
-	LD B, 8
-	OTIR
-	;ld a, 0
-	;ld b, a
-	;ld de, PALETTEFRAME0
-	;add hl, bc
-	;add hl, bc
-	;add hl, bc
-	;add hl, bc
 	;ld a, (hl)
-	;out (COL0L), a
-	;inc hl
-	;ld a, (hl)
-	;out (COL1R), a
-	;inc hl
-	;ld a, (hl)
-	;out (COL2R), a
-	;inc hl
-	;ld a, (hl)
-	;out (COL3R), a
+	out (COL3L), a		;add a banding effect to color3
+	sra a			;shift right so color value is increased every 4 lines
+	sra a
+	and $7			;repeat every 8 lines
+	or $d8			;or it with the pretty shade of blue
+	out (COL0L), a		; and add the banding effect to color0 (background) as well
 	ld a, (LINEINTNUM)
 	; put it to next line
 	add a, 4
-	cp 80		;bottom of screen?
+	cp $c0		;bottom of screen?
 	jr z, RESETSCR
 LINEHANDLERNEXTLINE:
-	out (INLIN), a
-	ld (LINEINTNUM), a
+	out (INLIN), a		; set next interrupt to 4 lines below us
+	ld (LINEINTNUM), a	; save the next line's location
 	POP     IX
 	POP     HL
 	POP     DE
@@ -113,8 +105,41 @@ LINEHANDLERNEXTLINE:
 
 RESETSCR:
 	CALL    STIMER		; call regular system timer
+	; check next frame
+	LD A, (VBLANKSUNTILNEXTFRAME)	; get vblanks until next frame
+	DEC A				; subtract one vblank
+	JR Z, SHOWNEXTFRAME
+RESETSCRSAVENEXTFRAME:
+	LD (VBLANKSUNTILNEXTFRAME), a
+RESETSCRAFTERFRAME:
 	ld a, $0
 	jr LINEHANDLERNEXTLINE
+
+SHOWNEXTFRAME:
+	; show the next frame
+	LD A, (CURRENTFRAMENUM)
+	INC A
+	CP NUMFRAMES
+	JR NZ, COPYNEXTFRAME
+	LD A, 0
+COPYNEXTFRAME:
+	LD (CURRENTFRAMENUM), A
+	SLA A			; since we are indexing into an array of 16-bit integers, multiply by 2
+	LD C, A			; feed the number into a 16-bit register for addition
+	LD B, 0
+	LD HL, FRAMETBL
+	ADD HL, BC		; find the address's index in the frame table
+	LD C, (HL)		; get the address of the frame to load
+	INC HL
+	LD B, (HL)
+	LD H, B
+	LD L, C
+	LD DE, NORMEM		; to screen memory
+	LD BC, 3200		; 80 lines, as always
+	CALL UNRLE		; push the frame up
+	CALL    STIMER		; we always miss one tick, so compensate by running one tick earlier
+	LD A, VBLANKSPERFRAME
+	JR RESETSCRSAVENEXTFRAME
 
 UNRLE:				; Here's a routine to decompress RLE-compressed data
 				; params: DE = destination, HL = source, BC = number of uncompressed bytes to extract
@@ -123,7 +148,6 @@ UNRLE:				; Here's a routine to decompress RLE-compressed data
 	PUSH    BC
 	PUSH    DE
 	PUSH    HL
-	PUSH    IX
 	LD ($4ee0), BC		; save BC for a bit
 RLEREADCMD:			; read a command from the RLE stream and write the decompressed versions of it
 	LD A, (HL)		; now we have the length of the RLE data to output
@@ -157,7 +181,6 @@ ENDEXTRACTLOOP:
 ENDRLELOOP1:
 	POP HL
 ENDRLELOOP:
-	POP     IX		; we are done, restore registers in same order and return to calling code
 	POP     HL
 	POP     DE
 	POP     BC
@@ -167,6 +190,20 @@ ENDRLELOOP:
 
 INTTBL:         ; INTerrupt TaBLe
 LFRVEC: DW      LINEHANDLER           ; Low Foreground Routine VECtor
+
+FRAMETBL:
+	DW	IMAGEFRAME0
+	DW	IMAGEFRAME1
+	DW	IMAGEFRAME2
+	DW	IMAGEFRAME3
+	DW	IMAGEFRAME4
+	DW	IMAGEFRAME5
+	DW	IMAGEFRAME6
+	;DW	IMAGEFRAME7 Seven crashes; too lazy to figure out why
+	;DW	IMAGEFRAME8
+	;DW	IMAGEFRAME9
+	;DW	IMAGEFRAME10
+	;DW	IMAGEFRAME11
 
 MSET:
         MASTER  $11

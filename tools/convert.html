@@ -7,6 +7,8 @@
 var img;
 var newColorMap = {};
 var theRleData, theDerpData;
+var predefinedPalette = [0, 0, 0, 0];
+var predefinedColors = {};
 
 function getClosestMatch(color) {
 	var retval = allColorMap[color];
@@ -18,6 +20,18 @@ function getClosestMatch(color) {
 	}
 	//console.log(color.toString(16) + ":" + retval);
 	return retval;
+}
+
+function buildColorMap() {
+	//addPredefined(0x083265, 0);
+	//addPredefined(0xc7a1d7, 1);
+	//addPredefined(0xff862e, 2);
+	//addPredefined(0xa4ff00, 3);
+}
+
+function addPredefined(color, index) {
+	predefinedPalette[index] = getClosestMatch(color);
+	predefinedColors[color] = index;
 }
 
 function addColorMap(color) {
@@ -40,7 +54,7 @@ function addColorMap(color) {
 function evacuateTheDanceFloor() {
 	img = new Image();
 	img.onload = imageLoaded;
-	img.src = "test-0.png";
+	img.src = "test2.png";
 }
 function imageLoaded() {
 	var leastExhaustCount = 0xffff;
@@ -54,16 +68,19 @@ function imageLoaded() {
 	}*/
 	leastExhaustLoc = 27; //It's been scientifically proven, fool! (using commented out for loop)
 	console.log(leastExhaustCount + ":" + leastExhaustLoc);
-	processImage(leastExhaustLoc, true);
+	document.getElementById("output").value = "";
+	for (var i = 0; i < 12; i++) {
+		processImage(leastExhaustLoc, true, i, 12);
+	}
 }
-function processImage(centerOffset, doItForRealz) {
+function processImage(centerOffset, doItForRealz, imageId, total) {
 	var canvas = document.getElementById("canvas");
 	canvas.width = 160;
 	canvas.height = 80;
 	var ctx = canvas.getContext("2d");
-	ctx.fillStyle = "#003366";
+	ctx.fillStyle = "#0a3164";
 	ctx.fillRect(0, 0, canvas.width, canvas.height);
-	ctx.drawImage(img, -2, 0, img.width / 5, img.height / 5);
+	ctx.drawImage(img, imageId * (img.width / total), 0, img.width / total, img.height, 0, 0, img.width / total / 5, img.height / 5);
 	var imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 	console.log(imgData);
 	var outData = [];
@@ -84,35 +101,35 @@ function processImage(centerOffset, doItForRealz) {
 	var freeLeftColor = 0;
 	var freeRightColor = 0;
 	var colorExhaustedCount = 0;
+	var alternate = 0;
+	var colorBands = [0xff, 0x88, 0x44, 0, 0, 0x44, 0x80, 0xff];
 	for (var y = 0; y < canvas.height; y++) {
-		if (y % 4 == 0) {
+		/*if (y % 4 == 0) {
 			curLineLeftPalette = [0, 0, 0, 0];
 			curLineRightPalette = [0, 0, 0, 0];
 			freeLeftColor = 0;
 			freeRightColor = 0;
 			curLineColorsLeft = {};
 			curLineColorsRight = {};
-		}
+		}*/
 		var lastColorMap = 0;
 		for (var x = 0; x < canvas.width; x++) {
-			curLineColors = x >= centerOffset? curLineColorsRight : curLineColorsLeft;
-			curLinePalette = x >= centerOffset? curLineRightPalette : curLineLeftPalette;
+			//curLineColors = x >= centerOffset? curLineColorsRight : curLineColorsLeft;
+			//curLinePalette = x >= centerOffset? curLineRightPalette : curLineLeftPalette;
+			curLineColors = predefinedColors;
+			curLinePalette = predefinedPalette;
 			var offsetCanvas = ((y * canvas.width) + x) * 4;
 			var color = imgData.data[offsetCanvas++] << 16 | imgData.data[offsetCanvas++] << 8 | imgData.data[offsetCanvas++];
 			var colorMap = curLineColors[color];
 			if (typeof(colorMap) == "undefined") {
 				var colorVal = getClosestMatch(color);
 				colorMap = curLinePalette.indexOf(colorVal);
-				var freeColor = x >= centerOffset? freeRightColor: freeLeftColor;
+				var freeColor = freeLeftColor;
 				if (colorMap < 0) {
 					if (freeColor < 4) {
 						colorMap = freeColor;
 						curLinePalette[freeColor] = getClosestMatch(color);
-						if (x >= centerOffset) {
-							freeRightColor++;
-						} else {
-							freeLeftColor++;
-						}
+						freeLeftColor++;
 					} else {
 						//console.log("No more colors." + x + ":" + y + "color map: " + JSON.stringify(curLineColors) + ":" + freeLeftColor + ":" + freeRightColor);
 						colorMap = lastColorMap;
@@ -140,10 +157,15 @@ function processImage(centerOffset, doItForRealz) {
 				curValue = 0;
 			}
 		}
-		if (y % 4 == 3) {
-			palettes = palettes.concat(curLineLeftPalette.reverse()).concat(curLineRightPalette.reverse());
+		/*if (y % 4 == 3) {
+			//palettes = palettes.concat([0xff, 0xff, 0xff, 0xff]);
+			//palettes = palettes.concat([0x88, 0x88, 0x88, 0x88]);
+			var b = colorBands[alternate];
+			palettes = palettes.concat([b, b, b, b]);
+			palettes = palettes.concat(curLineRightPalette.reverse());
 			console.log("Y = " + y + ":" + palettes.length);
-		}
+			alternate =  (alternate + 1) % 3;
+		}*/
 	}
 	//if (lastValue != -1) {
 		//outData.push(lastLength);
@@ -156,11 +178,12 @@ function processImage(centerOffset, doItForRealz) {
 	var rleData = doTheFancyRLEShirt(derpData);
 	console.log(rleData);
 	var outDataStr = printOutData(rleData);
-	var outPaletteStr = printOutData(palettes);
-	document.getElementById("output").value = "IMAGEFRAME0:\n" + outDataStr + "\nPALETTEFRAME0:\n" + outPaletteStr;
+	//var outPaletteStr = printOutData(palettes);
+	document.getElementById("output").value += "IMAGEFRAME" + imageId + ":\n" + outDataStr + "\n";
 	theRleData = rleData;
 	theDerpData = derpData;
 	console.log(palettes.length);
+	console.log(printOutData(predefinedPalette));
 	return colorExhaustedCount;
 }
 
@@ -238,6 +261,7 @@ function unRle(data) {
 	}
 	return outArray;
 }
+buildColorMap();
 </script>
 </head>
 <body>
