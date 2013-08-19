@@ -218,4 +218,7 @@ NYANNOTES:
 
 	INCLUDE "frame0.asm"
 
+        DB      'M','A','D','E',' ','B','Y',' ','@','Z','H','U','O','W','E','I'
+        DB      $00
+
 MSTACK  EQU     $4F12           ; (12 bytes) Music STACK
