@@ -3,7 +3,8 @@ DSPLY	equ	$ff		;Bally Check debug port
 CURRENTFRAMENUM	equ	$4f00	; stores current frame number
 LINEINTNUM 	equ 	$4f02	; scanline to trigger interrupt
 VBLANKSUNTILNEXTFRAME	equ $4eff
-VBLANKSPERFRAME	equ	60	; 1fps
+VBLANKSPERFRAME	equ	10	; 6fps
+NEXTFRAMEADDR	equ 	$4f04	; interrupt handler sets this and the normal code loads from here
 NUMFRAMES	equ 	7
 
 
@@ -62,12 +63,24 @@ START:
 	ld a, 0
 	out (INLIN), a
 	ld (LINEINTNUM), a
+	ld (NEXTFRAMEADDR), a
 
 	ld a, VBLANKSPERFRAME
 	ld (VBLANKSUNTILNEXTFRAME), a
 
 TIGHT:
 	hlt
+	LD HL, (NEXTFRAMEADDR)
+	LD A, H
+	OR L			; compare if next frame address is null
+	CP $0
+	JR Z, TIGHT
+	LD A, 0
+	LD (NEXTFRAMEADDR), A		; null the next frame
+	LD (NEXTFRAMEADDR+1), A
+	LD DE, NORMEM		; to screen memory
+	LD BC, 3200		; 80 lines, as always
+	CALL UNRLE		; push the frame up
 	jr TIGHT		; we don't do anything here
 
 LINEHANDLER:
@@ -134,20 +147,18 @@ COPYNEXTFRAME:
 	LD B, (HL)
 	LD H, B
 	LD L, C
-	LD DE, NORMEM		; to screen memory
-	LD BC, 3200		; 80 lines, as always
-	CALL UNRLE		; push the frame up
-	CALL    STIMER		; we always miss one tick, so compensate by running one tick earlier
+	LD (NEXTFRAMEADDR), HL
 	LD A, VBLANKSPERFRAME
 	JR RESETSCRSAVENEXTFRAME
 
 UNRLE:				; Here's a routine to decompress RLE-compressed data
 				; params: DE = destination, HL = source, BC = number of uncompressed bytes to extract
-	DI			; disable interrupts to avoid... well, being interrupted
+	;DI			; disable interrupts to avoid... well, being interrupted
 	PUSH    AF		; save registers
 	PUSH    BC
 	PUSH    DE
 	PUSH    HL
+	PUSH    IX
 	LD ($4ee0), BC		; save BC for a bit
 RLEREADCMD:			; read a command from the RLE stream and write the decompressed versions of it
 	LD A, (HL)		; now we have the length of the RLE data to output
@@ -181,11 +192,12 @@ ENDEXTRACTLOOP:
 ENDRLELOOP1:
 	POP HL
 ENDRLELOOP:
+	POP     IX
 	POP     HL
 	POP     DE
 	POP     BC
 	POP     AF
-	EI
+	;EI
 	RET
 
 INTTBL:         ; INTerrupt TaBLe
