@@ -70,17 +70,21 @@ function imageLoaded() {
 	console.log(leastExhaustCount + ":" + leastExhaustLoc);
 	document.getElementById("output").value = "";
 	for (var i = 0; i < 12; i++) {
-		processImage(leastExhaustLoc, true, i, 12);
+		processImage(leastExhaustLoc, true, i, 12, "#0a3164");
 	}
 }
-function processImage(centerOffset, doItForRealz, imageId, total) {
+function processImage(centerOffset, doItForRealz, imageId, total, fillStyle) {
 	var canvas = document.getElementById("canvas");
 	canvas.width = 160;
 	canvas.height = 80;
 	var ctx = canvas.getContext("2d");
-	ctx.fillStyle = "#0a3164";
+	ctx.fillStyle = fillStyle;
 	ctx.fillRect(0, 0, canvas.width, canvas.height);
-	ctx.drawImage(img, imageId * (img.width / total), 0, img.width / total, img.height, 0, 0, img.width / total / 5, img.height / 5);
+	if (total == 1) {
+		ctx.drawImage(img, imageId * (img.width / total), 0, img.width / total, img.height, 0, 0, 80, 80);
+	} else {
+		ctx.drawImage(img, imageId * (img.width / total), 0, img.width / total, img.height, 0, 0, img.width / total / 5, img.height / 5);
+	}
 	var imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 	console.log(imgData);
 	var outData = [];
@@ -238,6 +242,7 @@ function testRle() {
 	var output = doTheFancyRLEShirt(testData);
 	console.log(output.join(" "));*/
 	var derpOutput = unRle(theRleData);
+	console.log(derpOutput.length + ":" + theDerpData.length);
 	for (var i = 0; i < derpOutput.length; i++) {
 		if (derpOutput[i] != theDerpData[i]) {
 			console.log("FAIL at " + i);
@@ -261,6 +266,28 @@ function unRle(data) {
 	}
 	return outArray;
 }
+
+function discoInferno() {
+	img = new Image();
+	img.onload = imageLoaded2;
+	img.src = "neobadge.png";
+}
+function imageLoaded2() {
+	var leastExhaustCount = 0xffff;
+	var leastExhaustLoc = -1;
+	/*for (var i = 0; i < 160; i++) {
+		var exhaustCount = processImage(i, false);
+		if (exhaustCount < leastExhaustCount) {
+			leastExhaustCount = exhaustCount;
+			leastExhaustLoc = i;
+		}
+	}*/
+	leastExhaustLoc = 27; //It's not even used here
+	console.log(leastExhaustCount + ":" + leastExhaustLoc);
+	document.getElementById("output").value = "";
+	processImage(leastExhaustLoc, true, 0, 1, "#f7faf9");
+
+}
 buildColorMap();
 </script>
 </head>
@@ -269,5 +296,6 @@ buildColorMap();
 <textarea id="output">
 </textarea>
 <button onclick="evacuateTheDanceFloor()">Evacuate the dance floor</button>
+<button onclick="discoInferno()">Disco inferno</button>
 </body>
 </html>

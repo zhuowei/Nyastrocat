@@ -27,10 +27,10 @@ START:
 	;
         DO      ACTINT          ; UPI ACTivate sub timer INTerrupts
         ;
-        DO      BMUSIC          ; UPI Begin MUSIC for nyancat
+        DO      BMUSIC          ; UPI Begin MUSIC for splash
         DW      MSTACK          ; ... Music Stack
-        DB      $C0             ; ... Voices = 11000000B (ON VOICE A)
-        DW      NYANNOTES            ; ... Score Address (Nyancat song)
+        DB      11001100B             ; ... Voices = 11001100B (ON VOICE A+C)
+        DW      SPLASHNOTES            ; ... Score Address (Chime which is totally not a copy of the Sega Chant tone)
 	;
 	;DO	MOVE		; push the first frame up
 	;DW	NORMEM		; to screen memory
@@ -38,6 +38,26 @@ START:
 	;DW	IMAGEFRAME0	; from first frame
 
         DONT    XINTC           ; UPI eXit INTerpreter with Context
+
+	ld a, $7
+	out (COL0L), a		;background
+	ld a, $67
+	out (COL1L), a
+
+	SYSSUK STRDIS
+	DB 0
+	DB 0
+	DB $04
+	DW NEOSTR
+
+	SYSSUK PAWS		; wait for the splash screen
+	DB      90             ; 1.5 second
+        SYSSUK  BMUSIC          ; UPI Begin MUSIC for nyancat
+        DW      MSTACK          ; ... Music Stack
+        DB      $C0             ; ... Voices = 11000000B (ON VOICE A)
+        DW      NYANNOTES            ; ... Score Address (Nyancat song)
+
+POSTSPLASH:
 
 	LD DE, NORMEM		; to screen memory
 	LD HL, IMAGEFRAME0
@@ -69,7 +89,7 @@ START:
 	ld (VBLANKSUNTILNEXTFRAME), a
 
 TIGHT:
-	hlt
+	HALT
 	LD HL, (NEXTFRAMEADDR)
 	LD A, H
 	OR L			; compare if next frame address is null
@@ -187,6 +207,7 @@ ENDEXTRACTLOOP:
 	SBC HL, BC		; subtract the bytes extracted this round
 	LD ($4ee0), HL		; save the length again
 	JR Z, ENDRLELOOP1	; if 0 then we are done, pop HL again and exit
+	JR C, ENDRLELOOP1
 	POP HL			; pop HL, which is used to hold the pointer into the RLE data
 	JR RLEREADCMD		; next command please
 ENDRLELOOP1:
@@ -228,9 +249,17 @@ NYANNOTES:
 	DB	$C3		;jump to
 	DW	NYANNOTES	;beginning of song
 
+SPLASHNOTES:
+        MASTER  $11
+        VOLUME  $09, $09
+	NOTE2 30, E4, G4
+	NOTE2 30, C4, E4
+	QUIET
+
 	INCLUDE "frame0.asm"
 
-        DB      'M','A','D','E',' ','B','Y',' ','@','Z','H','U','O','W','E','I'
-        DB      $00
+NEOSTR:
+	DB	'W','W','W','.','N','E','O','F','L','A','S','H','.','C','O','M'
+	DB	$00
 
 MSTACK  EQU     $4F12           ; (12 bytes) Music STACK
